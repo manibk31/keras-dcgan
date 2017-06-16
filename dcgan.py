@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jun  6 15:36:04 2017
+
+@author: wenyu6
+"""
+
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Reshape
@@ -21,7 +28,7 @@ def generator_model():
     model.add(Dense(128*7*7))
     model.add(BatchNormalization())
     model.add(Activation('tanh'))
-    model.add(Reshape((128, 7, 7), input_shape=(128*7*7,)))
+    model.add(Reshape((7, 7, 128), input_shape=(128*7*7,)))
     model.add(UpSampling2D(size=(2, 2)))
     model.add(Convolution2D(64, 5, 5, border_mode='same'))
     model.add(Activation('tanh'))
@@ -36,7 +43,7 @@ def discriminator_model():
     model.add(Convolution2D(
                         64, 5, 5,
                         border_mode='same',
-                        input_shape=(1, 28, 28)))
+                        input_shape=(28, 28, 1)))
     model.add(Activation('tanh'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Convolution2D(128, 5, 5))
@@ -62,14 +69,14 @@ def combine_images(generated_images):
     num = generated_images.shape[0]
     width = int(math.sqrt(num))
     height = int(math.ceil(float(num)/width))
-    shape = generated_images.shape[2:]
+    shape = generated_images.shape[1:]
     image = np.zeros((height*shape[0], width*shape[1]),
                      dtype=generated_images.dtype)
     for index, img in enumerate(generated_images):
         i = int(index/width)
         j = index % width
         image[i*shape[0]:(i+1)*shape[0], j*shape[1]:(j+1)*shape[1]] = \
-            img[0, :, :]
+            img[ :, :, 0]
     return image
 
 
@@ -89,6 +96,8 @@ def train(BATCH_SIZE):
     discriminator.trainable = True
     discriminator.compile(loss='binary_crossentropy', optimizer=d_optim)
     noise = np.zeros((BATCH_SIZE, 100))
+    generator.load_weights('generator')
+    discriminator.load_weights('discriminator')
     for epoch in range(100):
         print("Epoch is", epoch)
         print("Number of batches", int(X_train.shape[0]/BATCH_SIZE))
@@ -102,6 +111,12 @@ def train(BATCH_SIZE):
                 image = image*127.5+127.5
                 Image.fromarray(image.astype(np.uint8)).save(
                     str(epoch)+"_"+str(index)+".png")
+            image_batch=np.transpose(image_batch,(0,2,3,1))
+            if index % 20 == 0:
+                image_real = combine_images(image_batch)
+                image_real = image_real*127.5+127.5
+                Image.fromarray(image_real.astype(np.uint8)).save(
+                    "target"+str(epoch)+"_"+str(index)+".png")
             X = np.concatenate((image_batch, generated_images))
             y = [1] * BATCH_SIZE + [0] * BATCH_SIZE
             d_loss = discriminator.train_on_batch(X, y)
@@ -162,8 +177,10 @@ def get_args():
     return args
 
 if __name__ == "__main__":
-    args = get_args()
-    if args.mode == "train":
-        train(BATCH_SIZE=args.batch_size)
-    elif args.mode == "generate":
-        generate(BATCH_SIZE=args.batch_size, nice=args.nice)
+    #args = get_args()
+    batch_size=128
+    mode ='generate'
+    if mode == "train":
+        train(BATCH_SIZE=batch_size)
+    elif mode == "generate":
+        generate(BATCH_SIZE=batch_size)
